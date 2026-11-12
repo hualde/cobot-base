@@ -1,0 +1,46 @@
+# La CI usa el MISMO Dockerfile que desarrollo y entrega: si pasa aquí, pasa en el PC del cliente.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Build + tests (etapa "test" del Dockerfile)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: test
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  runtime:
+    name: Imagen de entrega (etapa "runtime")
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: runtime
+          push: false          # para publicar: login a un registry (GHCR) y push: true
+          tags: cobot-base:runtime
+          cache-from: type=gha
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx run ruff check src
+      - run: shellcheck scripts/*.sh docker/*.sh

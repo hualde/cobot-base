@@ -1,0 +1,12 @@
+build/
+install/
+log/
+.git/
+data/
+**/__pycache__/
+.devcontainer/
+.github/
+*.md
+.env
+dist/
+deploy/

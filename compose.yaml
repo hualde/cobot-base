@@ -1,0 +1,56 @@
+# Servicios de DESARROLLO (tu PC). Variables en .env (lo crea scripts/dev.sh a partir de .env.example).
+#
+#   dev      -> contenedor de desarrollo (ROS 2, MoveIt 2, paquetes UR, RViz). Tu código montado en /ws.
+#   ursim    -> simulador oficial del controlador UR.
+#
+# El despliegue en el cliente NO usa este fichero: ver deploy/compose.yaml.
+#
+# Isaac Sim NO está aquí: corre en el host. Se comunica con estos contenedores por DDS gracias a
+# network_mode: host + ipc: host.
+name: cobot-base
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev
+      args:
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+    image: cobot-base:dev
+    container_name: cobot-dev
+    network_mode: host      # mismos interfaces de red que el host: DDS descubre a Isaac Sim y a ROS del host
+    ipc: host               # memoria compartida del host: transporte SHM de Fast DDS para imágenes y nubes de puntos
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      DISPLAY: ${DISPLAY:-:0}                 # RViz se dibuja en la pantalla del host (X11)
+      NVIDIA_DRIVER_CAPABILITIES: all
+    volumes:
+      - .:/ws                                 # el repo ES el workspace: edita en el host, compila dentro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    stdin_open: true
+    tty: true
+
+  ursim:
+    image: universalrobots/ursim_e-series:${URSIM_TAG:-latest}
+    container_name: ursim
+    environment:
+      ROBOT_MODEL: ${URSIM_MODEL:-UR5}       # UR3, UR5, UR10, UR16... (serie e)
+    networks:
+      ursim_net:
+        ipv4_address: 192.168.56.101        # misma IP que usan los ejemplos oficiales del driver UR
+
+networks:
+  ursim_net:
+    name: ursim_net
+    ipam:
+      config:
+        - subnet: 192.168.56.0/24

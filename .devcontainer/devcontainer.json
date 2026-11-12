@@ -1,0 +1,28 @@
+// VS Code: "Dev Containers: Reopen in Container". Reutiliza el servicio "dev" de compose.yaml,
+// así el contenedor es el mismo tanto si trabajas desde VS Code como desde la terminal (scripts/dev.sh).
+{
+  "name": "cobot-base (ROS 2 Jazzy)",
+  "dockerComposeFile": ["../compose.yaml"],
+  "service": "dev",
+  "runServices": ["dev"],
+  "workspaceFolder": "/ws",
+  "shutdownAction": "none",
+  // Se ejecuta en el HOST antes de arrancar: crea .env con tu UID/GID y permite a tu usuario usar la pantalla X11.
+  "initializeCommand": "test -f .env || sed -e \"s/^USER_UID=.*/USER_UID=$(id -u)/\" -e \"s/^USER_GID=.*/USER_GID=$(id -g)/\" .env.example > .env; xhost +SI:localuser:$(id -un) >/dev/null 2>&1 || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "redhat.vscode-xml",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "files.associations": { "*.xacro": "xml", "*.launch": "xml" },
+        "python.analysis.extraPaths": ["/opt/ros/jazzy/lib/python3.12/site-packages"]
+      }
+    }
+  }
+}

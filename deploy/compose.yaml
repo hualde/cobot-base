@@ -1,0 +1,24 @@
+# Despliegue en el PC de la célula del cliente.
+# Este fichero, junto con .env, es lo ÚNICO que se copia al cliente (además de la imagen Docker).
+# No contiene código fuente ni compila nada: arranca una imagen ya construida y probada.
+#
+#   docker compose up -d        arrancar (y queda arrancado tras reinicios del PC)
+#   docker compose logs -f      ver qué está pasando
+#   docker compose down         parar
+services:
+  cobot:
+    image: ${IMAGE}:${VERSION}
+    container_name: cobot
+    network_mode: host        # DDS y el driver UR usan la red del PC directamente
+    ipc: host                 # memoria compartida para ROS 2
+    restart: unless-stopped   # arranca solo al encender el PC y se reinicia si falla
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    command: >
+      ros2 launch cobot_bringup ursim_moveit.launch.py
+      robot_ip:=${ROBOT_IP} ur_type:=${UR_TYPE} rviz:=false
+    logging:                  # que los logs no llenen el disco del cliente
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

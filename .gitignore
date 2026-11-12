@@ -1,0 +1,15 @@
+build/
+install/
+log/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# datasets y pesos de modelos: fuera del repo (DVC, S3, etc.)
+data/
+*.ckpt
+*.pt
+*.onnx
+.env
+dist/
+deploy/.env

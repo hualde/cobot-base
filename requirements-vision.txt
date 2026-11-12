@@ -1,0 +1,4 @@
+torch>=2.5
+torchvision
+opencv-python-headless>=4.10
+anomalib>=2.0

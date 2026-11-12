@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<!-- UR (descripción oficial de ur_description) + cámara RGB-D en la muñeca.
+     Sin nada específico de simulador: sirve para robot_state_publisher, para importar en Isaac Sim
+     y para el robot real con una RealSense D435 montada en la brida. -->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="$(arg name)">
+  <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro"/>
+
+  <xacro:arg name="camera_name" default="wrist_camera"/>
+  <xacro:property name="cam" value="$(arg camera_name)"/>
+  <xacro:arg name="tf_prefix" default=""/>
+  <xacro:property name="prefix" value="$(arg tf_prefix)"/>
+
+  <!-- Cuerpo de cámara (dimensiones de una D435). +X del enlace = eje de visión. -->
+  <link name="${cam}_link">
+    <visual>
+      <geometry><box size="0.025 0.09 0.025"/></geometry>
+      <material name="camera_grey"><color rgba="0.2 0.2 0.2 1"/></material>
+    </visual>
+    <collision>
+      <geometry><box size="0.025 0.09 0.025"/></geometry>
+    </collision>
+    <inertial>
+      <mass value="0.072"/>
+      <inertia ixx="5e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="5e-5"/>
+    </inertial>
+  </link>
+
+  <!-- Mira a lo largo de +Z de tool0 (hacia fuera de la brida), desplazada 6 cm para dejar sitio a una herramienta. -->
+  <joint name="${cam}_joint" type="fixed">
+    <parent link="${prefix}tool0"/>
+    <child link="${cam}_link"/>
+    <origin xyz="0 -0.06 0.02" rpy="0 ${-pi/2} 0"/>
+  </joint>
+
+  <!-- Marco óptico ROS (Z hacia delante, X a la derecha, Y hacia abajo): aquí se publican las imágenes. -->
+  <link name="${cam}_optical_frame"/>
+  <joint name="${cam}_optical_joint" type="fixed">
+    <parent link="${cam}_link"/>
+    <child link="${cam}_optical_frame"/>
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+  </joint>
+</robot>
