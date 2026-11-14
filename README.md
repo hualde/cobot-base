@@ -35,7 +35,7 @@ Si es tu primera vez con este software, estos son los términos que vas a ver:
 | **Cobot** | Robot colaborativo: brazo industrial pensado para trabajar cerca de personas. Usamos los de **Universal Robots (UR)**. |
 | **ROS 2** | El "sistema operativo" de los robots: un conjunto de programas que se comunican enviándose mensajes (posición del brazo, imágenes de la cámara...). Usamos la versión **Jazzy**. |
 | **Nodo** | Un programa de ROS 2. Por ejemplo: el que habla con el robot, el que planifica movimientos, el que muestra la cámara. |
-| **Tópico** | Un "canal" por el que los nodos se envían mensajes. Ejemplo: `/wrist_camera/image` lleva las imágenes de la cámara. |
+| **Tópico** | Un "canal" por el que los nodos se envían mensajes. Ejemplo: `/wrist_camera/color/image_raw` lleva las imágenes de la cámara. |
 | **Paquete** | Una carpeta con código ROS 2 que se compila junta. Nuestro paquete se llama `cobot_bringup`. |
 | **Launch** | Un fichero que arranca varios nodos a la vez con un solo comando. |
 | **MoveIt 2** | El planificador de movimientos: calcula cómo llevar el brazo de un punto a otro sin chocar. |
@@ -83,14 +83,14 @@ cobot-base/
 │       │   ├── isaac_moveit.launch.py     → mover el robot simulado en Isaac Sim
 │       │   └── ur_moveit.launch.py        → mover el robot de URSim o el robot real
 │       ├── urdf/
-│       │   └── ur_wrist_camera.urdf.xacro → forma del robot + cámara montada en la muñeca
+│       │   └── ur_wrist_camera.urdf.xacro → forma del robot + RealSense D455 montada en la muñeca
 │       ├── config/
 │       │   └── isaac_controllers.yaml     → qué controladores de movimiento usa el robot en Isaac Sim
 │       └── test/
 │           └── test_config.py             → pruebas automáticas (el modelo es correcto, la configuración cuadra)
 │
 ├── isaac/                        ★ LA SIMULACIÓN 3D
-│   └── ur_inspection_cell.py     Crea la escena en Isaac Sim: almacén, robot, mesa con piezas y cámara.
+│   └── ur_inspection_cell.py     Crea la escena en Isaac Sim: almacén, robot, mesa con piezas y RealSense D455.
 │
 ├── docker/                       ★ EL EMPAQUETADO
 │   ├── Dockerfile                Receta para construir las imágenes (qué se instala dentro).
@@ -186,6 +186,19 @@ colcon test-result --verbose       # ver el resultado
 
 Para salir del contenedor: `exit`. Para volver a entrar: `./scripts/dev.sh`.
 
+**Varias terminales dentro del contenedor.** Muchas veces necesitas más de una a la vez (una con MoveIt, otra
+con el visor de la cámara...). Abre otra terminal en tu PC (Ctrl+Alt+T o una pestaña nueva), ve a la carpeta del
+proyecto y vuelve a ejecutar:
+
+```bash
+./scripts/dev.sh
+```
+
+Si el contenedor ya está en marcha, no lo reconstruye ni lo reinicia: entra en el **mismo** contenedor en un par
+de segundos, y lo que corre en las otras terminales sigue funcionando. Las ventanas gráficas (RViz, rqt) se abren
+en tu escritorio. También puedes lanzar un comando suelto sin entrar:
+`./scripts/dev.sh ros2 run rqt_image_view rqt_image_view /wrist_camera/color/image_raw`.
+
 > **Isaac Sim y la tarjeta gráfica**: NVIDIA recomienda como mínimo una RTX 4080 (16 GB) y 32 GB de RAM.
 > Con una RTX 4060 (8 GB) esta escena funciona, pero escenas más grandes pueden no caber.
 
@@ -216,10 +229,21 @@ Se abre **RViz** con el robot. Para moverlo:
 2. En el panel *MotionPlanning*, pulsa **Plan & Execute**.
 3. El robot se mueve en RViz **y** en Isaac Sim.
 
+La cámara de la muñeca es una **Intel RealSense D455** (el modelo que trae Isaac Sim, con su malla e
+intrínsecos reales). Publica con los mismos nombres que el driver oficial `realsense2_camera`, así el código
+sirve igual en simulación y con la cámara real:
+
+| Tópico | Contenido |
+|---|---|
+| `/wrist_camera/color/image_raw` | imagen en color |
+| `/wrist_camera/color/camera_info` | calibración (intrínsecos) |
+| `/wrist_camera/aligned_depth_to_color/image_raw` | profundidad alineada con el color (en simulación, metros en 32FC1; la real da milímetros en 16UC1) |
+| `/wrist_camera/depth/color/points` | nube de puntos |
+
 Para ver lo que ve la cámara de la muñeca (en otra terminal dentro del contenedor):
 
 ```bash
-ros2 run rqt_image_view rqt_image_view /wrist_camera/image
+ros2 run rqt_image_view rqt_image_view /wrist_camera/color/image_raw
 ```
 
 Comandos útiles para explorar (dentro del contenedor):
@@ -227,7 +251,7 @@ Comandos útiles para explorar (dentro del contenedor):
 ```bash
 ros2 topic list                    # ver todos los canales de mensajes
 ros2 topic echo /joint_states      # ver la posición de las articulaciones en directo
-ros2 topic hz /wrist_camera/image  # ver cuántas imágenes por segundo envía la cámara
+ros2 topic hz /wrist_camera/color/image_raw  # ver cuántas imágenes por segundo envía la cámara
 ```
 
 Opciones de la escena: `./scripts/isaac_cell.sh --robot ur10e` (otro modelo de robot),
@@ -259,6 +283,7 @@ Puedes ver la pantalla del robot (la del teach pendant) en el navegador:
 |---|---|
 | Programar | Edita los ficheros de `src/` con tu editor normal, en tu PC. |
 | Compilar | Dentro del contenedor: `colcon build --symlink-install` |
+| Abrir otra terminal en el contenedor | En una terminal nueva del PC: `./scripts/dev.sh` (entra en el mismo contenedor) |
 | Añadir una librería o paquete | Añádela a `src/cobot_bringup/package.xml` y reconstruye: `docker compose build dev` |
 | Trabajar desde VS Code | Abre la carpeta y elige *Reopen in Container* |
 | Parar los contenedores | `docker compose down` |

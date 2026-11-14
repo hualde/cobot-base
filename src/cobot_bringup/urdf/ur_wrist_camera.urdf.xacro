@@ -1,42 +1,26 @@
 <?xml version="1.0"?>
-<!-- UR (descripción oficial de ur_description) + cámara RGB-D en la muñeca.
-     Sin nada específico de simulador: sirve para robot_state_publisher, para importar en Isaac Sim
-     y para el robot real con una RealSense D435 montada en la brida. -->
+<!-- UR (descripción oficial de ur_description) + Intel RealSense D455 en la muñeca
+     (modelo oficial de realsense2_description: malla, medidas y marcos iguales que los del driver realsense2_camera).
+     Sin nada específico de simulador: sirve para robot_state_publisher, para Isaac Sim (que usa el asset
+     /Isaac/Sensors/RealSense/D455/rsd455.usd con la misma geometría) y para el robot real. -->
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="$(arg name)">
   <xacro:include filename="$(find ur_description)/urdf/ur.urdf.xacro"/>
+  <xacro:include filename="$(find realsense2_description)/urdf/_d455.urdf.xacro"/>
 
   <xacro:arg name="camera_name" default="wrist_camera"/>
-  <xacro:property name="cam" value="$(arg camera_name)"/>
+  <!-- true: este URDF publica los marcos ópticos (color, profundidad, IR...) con los valores nominales (simulación).
+       false: con la cámara real, porque el driver realsense2_camera ya publica sus extrínsecos calibrados. -->
+  <xacro:arg name="camera_nominal_extrinsics" default="true"/>
   <xacro:arg name="tf_prefix" default=""/>
   <xacro:property name="prefix" value="$(arg tf_prefix)"/>
 
-  <!-- Cuerpo de cámara (dimensiones de una D435). +X del enlace = eje de visión. -->
-  <link name="${cam}_link">
-    <visual>
-      <geometry><box size="0.025 0.09 0.025"/></geometry>
-      <material name="camera_grey"><color rgba="0.2 0.2 0.2 1"/></material>
-    </visual>
-    <collision>
-      <geometry><box size="0.025 0.09 0.025"/></geometry>
-    </collision>
-    <inertial>
-      <mass value="0.072"/>
-      <inertia ixx="5e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="5e-5"/>
-    </inertial>
-  </link>
-
-  <!-- Mira a lo largo de +Z de tool0 (hacia fuera de la brida), desplazada 6 cm para dejar sitio a una herramienta. -->
-  <joint name="${cam}_joint" type="fixed">
-    <parent link="${prefix}tool0"/>
-    <child link="${cam}_link"/>
-    <origin xyz="0 -0.06 0.02" rpy="0 ${-pi/2} 0"/>
-  </joint>
-
-  <!-- Marco óptico ROS (Z hacia delante, X a la derecha, Y hacia abajo): aquí se publican las imágenes. -->
-  <link name="${cam}_optical_frame"/>
-  <joint name="${cam}_optical_joint" type="fixed">
-    <parent link="${cam}_link"/>
-    <child link="${cam}_optical_frame"/>
-    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-  </joint>
+  <!-- Montaje lateral: la base de la cámara (rosca de trípode, wrist_camera_bottom_screw_frame) apoyada en un
+       soporte a 5,2 cm del eje de la brida, por el lado -Y de tool0 (la muñeca del UR5e llega a 4,4 cm).
+       La cámara mira a lo largo de +Z de tool0 (hacia fuera de la brida) con el lado largo según X de tool0,
+       así la brida queda libre para una herramienta.
+       ¡Si cambias estos números, cambia también MOUNT_XYZ / MOUNT_RPY en isaac/ur_inspection_cell.py! -->
+  <xacro:sensor_d455 parent="${prefix}tool0" name="$(arg camera_name)"
+                     use_nominal_extrinsics="$(arg camera_nominal_extrinsics)">
+    <origin xyz="0 -0.052 -0.01" rpy="${pi/2} ${-pi/2} 0"/>
+  </xacro:sensor_d455>
 </robot>

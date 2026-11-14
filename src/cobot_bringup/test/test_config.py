@@ -23,7 +23,9 @@ def urdf(request):
 def test_camera_attached_to_tool0(urdf):
     joints = {j.get("name"): j for j in urdf.findall("joint")}
     assert joints["wrist_camera_joint"].find("parent").get("link") == "tool0"
-    assert joints["wrist_camera_optical_joint"].find("child").get("link") == "wrist_camera_optical_frame"
+    # Marcos de la D455 (realsense2_description); Isaac Sim publica las imágenes en el óptico de color.
+    assert joints["wrist_camera_color_optical_joint"].find("child").get("link") == "wrist_camera_color_optical_frame"
+    assert joints["wrist_camera_depth_optical_joint"].find("child").get("link") == "wrist_camera_depth_optical_frame"
 
 
 def test_urdf_has_ur_joints(urdf):

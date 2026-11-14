@@ -1,4 +1,4 @@
-"""Celda de inspección en Isaac Sim: UR + mesa con piezas + cámara RGB-D en la muñeca, con ros2_control.
+"""Celda de inspección en Isaac Sim: UR + mesa con piezas + Intel RealSense D455 en la muñeca, con ros2_control.
 
 Se ejecuta en el HOST con el Python de Isaac Sim (no en el contenedor), a través de:
 
@@ -9,11 +9,14 @@ Se ejecuta en el HOST con el Python de Isaac Sim (no en el contenedor), a travé
 Qué publica / ofrece hacia ROS 2 (el contenedor dev lo consume con isaac_moveit.launch.py):
     /clock                                  tiempo de simulación
     /controller_manager + controladores     ros2_control dentro de Isaac (config/isaac_controllers.yaml)
-    /wrist_camera/image                     sensor_msgs/Image (rgb8)
-    /wrist_camera/depth_image               sensor_msgs/Image (32FC1, metros)
-    /wrist_camera/points                    sensor_msgs/PointCloud2
-    /wrist_camera/camera_info               sensor_msgs/CameraInfo
-Todo en el marco wrist_camera_optical_frame, el mismo que define urdf/ur_wrist_camera.urdf.xacro.
+    /wrist_camera/color/image_raw                   sensor_msgs/Image (rgb8)
+    /wrist_camera/color/camera_info                 sensor_msgs/CameraInfo
+    /wrist_camera/aligned_depth_to_color/image_raw  sensor_msgs/Image (32FC1, metros)
+    /wrist_camera/depth/color/points                sensor_msgs/PointCloud2
+Los nombres son los del driver oficial realsense2_camera (camera_name:=wrist_camera, align_depth.enable:=true),
+así el mismo código vale en simulación y con la cámara real. Única diferencia: el driver real publica la
+profundidad en 16UC1 (milímetros) y aquí sale en 32FC1 (metros); cv_bridge / image_geometry aceptan ambas.
+Todo en el marco wrist_camera_color_optical_frame, el mismo que define urdf/ur_wrist_camera.urdf.xacro.
 
 Patrón tomado de los ejemplos oficiales de Isaac Sim 6.2:
     standalone_examples/api/isaacsim.ros2.control/ur10_ros2_control_demo.py
@@ -63,7 +66,20 @@ CONTROLLER_YAML = os.path.join(REPO, "src", "cobot_bringup", "config", "isaac_co
 ROBOT_PATH = "/World/UR"
 WRIST_LINK = f"{ROBOT_PATH}/wrist_3_link"   # en estos assets, mismo marco que tool0 de ur_description
 CAMERA_PATH = f"{WRIST_LINK}/wrist_camera"
-CAMERA_FRAME_ID = "wrist_camera_optical_frame"
+# Asset oficial de NVIDIA (malla, IMU y cámaras con los intrínsecos/posiciones de la D455 real).
+REALSENSE_USD = "/Isaac/Sensors/RealSense/D455/rsd455.usd"
+# De sus cámaras (Pseudo_Depth, OV9782_Color, OV9782_Left/Right) usamos la de color: RGB + profundidad alineada.
+COLOR_CAMERA_PATH = f"{CAMERA_PATH}/RSD455/Camera_OmniVision_OV9782_Color"
+CAMERA_FRAME_ID = "wrist_camera_color_optical_frame"
+CAMERA_TOPIC = "wrist_camera"
+
+# Montaje: COPIA de urdf/ur_wrist_camera.urdf.xacro (tool0 -> wrist_camera_bottom_screw_frame).
+MOUNT_XYZ = (0.0, -0.052, -0.01)
+MOUNT_RPY_DEG = (90.0, -90.0, 0.0)
+# Origen del asset USD (entre los dos sensores IR, en el plano de profundidad cero; X adelante, Z arriba)
+# respecto a la rosca de trípode. Sale de realsense2_description/_d455.urdf.xacro:
+# x = 0.0158 - 0.0001 - 0.00455 (plano de profundidad), z = 0.029 / 2 (mitad de la altura de la carcasa).
+SCREW_TO_ASSET = (0.01115, 0.0, 0.0145)
 
 # Postura inicial: brazo "mirando" hacia abajo, delante de la base.
 HOME_DEG = {
@@ -175,42 +191,49 @@ def set_home_pose(stage):
         prim.CreateAttribute("state:angular:physics:position", Sdf.ValueTypeNames.Float).Set(deg)
 
 
-def add_wrist_camera(stage):
-    """Cámara montada como en urdf/ur_wrist_camera.urdf.xacro (respecto a tool0 == wrist_3_link).
+def add_wrist_camera(stage, assets_root: str):
+    """Monta la RealSense D455 de NVIDIA tal y como la coloca urdf/ur_wrist_camera.urdf.xacro.
 
-    xacro:  tool0 -> wrist_camera_link:  xyz (0, -0.06, 0.02), rpy (0, -pi/2, 0)
-            wrist_camera_link -> optical: rpy (-pi/2, 0, -pi/2)
-    Una cámara USD mira hacia -Z con +Y arriba; el marco óptico ROS mira hacia +Z con +Y abajo:
-    se pasa de uno a otro con un giro de 180 grados en X.
+    Los ejes del asset coinciden con los de wrist_camera_link de realsense2_description (X hacia delante, Y a la
+    izquierda, Z arriba), así que basta con la misma rotación del montaje y el desplazamiento SCREW_TO_ASSET.
+    Las cámaras USD del asset ya están giradas por dentro (miran hacia +X), no hace falta corregirlas.
     """
-    r_link = rot("y", -90)
-    r_optical = rot("z", -90) @ rot("x", -90)
-    r_usd = r_link @ r_optical @ rot("x", 180)
+    roll, pitch, yaw = MOUNT_RPY_DEG
+    r_mount = rot("z", yaw) @ rot("y", pitch) @ rot("x", roll)   # convención rpy de URDF
+    pos = np.array(MOUNT_XYZ) + r_mount @ np.array(SCREW_TO_ASSET)
 
-    cam = UsdGeom.Camera.Define(stage, CAMERA_PATH)
-    place(cam.GetPrim(), (0.0, -0.06, 0.02), quat(r_usd))
-    # Intrínsecos aproximados de una RealSense D435 (RGB): HFOV 69.4 grados.
-    focal = 18.8
-    h_aperture = 2 * focal * math.tan(math.radians(69.4 / 2))
-    cam.GetFocalLengthAttr().Set(focal)
-    cam.GetHorizontalApertureAttr().Set(h_aperture)
+    stage_utils.add_reference_to_stage(usd_path=assets_root + REALSENSE_USD, path=CAMERA_PATH)
+    place(stage.GetPrimAtPath(CAMERA_PATH), pos, quat(r_mount))
+
+    # El asset viene como sólido rígido independiente (para dejarlo caer sobre una mesa). Colgado de la muñeca,
+    # PhysX lo trataría como otro cuerpo y se quedaría atrás al mover el brazo: se le quita, y así pasa a formar
+    # parte de wrist_3_link (su masa de 103 g se suma a la del eslabón, como en el robot real).
+    body = stage.GetPrimAtPath(f"{CAMERA_PATH}/RSD455")
+    body.RemoveAPI(UsdPhysics.RigidBodyAPI)
+    body.RemoveAppliedSchema("PhysxRigidBodyAPI")
+    # Su IMU busca ese sólido rígido y llena el log de errores; no se publica a ROS, así que se desactiva.
+    stage.GetPrimAtPath(f"{CAMERA_PATH}/RSD455/Imu_Sensor").SetActive(False)
+
+    cam_prim = stage.GetPrimAtPath(COLOR_CAMERA_PATH)
+    if not cam_prim.IsValid():
+        raise RuntimeError(f"El asset {REALSENSE_USD} no tiene {COLOR_CAMERA_PATH}: ¿ha cambiado de versión?")
+    cam = UsdGeom.Camera(cam_prim)
+    # Intrínsecos del asset (HFOV ~90 grados, como el RGB de la D455); solo se ajusta la apertura vertical a la
+    # resolución pedida para que los píxeles sean cuadrados.
+    h_aperture = cam.GetHorizontalApertureAttr().Get()
     cam.GetVerticalApertureAttr().Set(h_aperture * args.height / args.width)
+    # El asset trae 1 cm..1000 km; la D455 real no ve nada a menos de ~0,4 m, pero en la celda las piezas
+    # quedan cerca, así que se deja un rango útil para la simulación.
     cam.GetClippingRangeAttr().Set(Gf.Vec2f(0.1, 10.0))
-    # Frecuencia del sensor (forma recomendada en 6.2; frameSkipCount está obsoleto).
-    cam.GetPrim().ApplyAPI("OmniSensorAPI")
-    cam.GetPrim().GetAttribute("omni:sensor:tickRate").Set(args.camera_hz)
-
-    # Cuerpo de la cámara, solo visual (sin colisión: no altera la dinámica del brazo).
-    box(stage, f"{WRIST_LINK}/wrist_camera_body", (0.025, 0.09, 0.025), (0.0, -0.06, 0.02),
-        (0.15, 0.15, 0.15), collision=False)
+    cam_prim.GetAttribute("omni:sensor:tickRate").Set(args.camera_hz)
 
 
 # --------------------------------------------------------------------------------------------- ROS 2
 def build_ros_graph():
     keys = og.Controller.Keys
-    cam_types = [("Rgb", "rgb", "wrist_camera/image"),
-                 ("Depth", "depth", "wrist_camera/depth_image"),
-                 ("Points", "depth_pcl", "wrist_camera/points")]
+    cam_types = [("Rgb", "rgb", f"{CAMERA_TOPIC}/color/image_raw"),
+                 ("Depth", "depth", f"{CAMERA_TOPIC}/aligned_depth_to_color/image_raw"),
+                 ("Points", "depth_pcl", f"{CAMERA_TOPIC}/depth/color/points")]
     og.Controller.edit(
         {"graph_path": "/ROS2Graph", "evaluator_name": "execution"},
         {
@@ -238,11 +261,11 @@ def build_ros_graph():
                 ("ROS2ControlManager.inputs:controllerConfig", CONTROLLER_YAML),
                 # La descripción del robot (con la cámara) la publica robot_state_publisher en el contenedor.
                 ("ROS2ControlManager.inputs:publishRobotDescription", False),
-                ("RenderProduct.inputs:cameraPrim", [usdrt.Sdf.Path(CAMERA_PATH)]),
+                ("RenderProduct.inputs:cameraPrim", [usdrt.Sdf.Path(COLOR_CAMERA_PATH)]),
                 ("RenderProduct.inputs:width", args.width),
                 ("RenderProduct.inputs:height", args.height),
                 ("CameraInfo.inputs:frameId", CAMERA_FRAME_ID),
-                ("CameraInfo.inputs:topicName", "wrist_camera/camera_info"),
+                ("CameraInfo.inputs:topicName", f"{CAMERA_TOPIC}/color/camera_info"),
             ] + [v for n, kind, topic in cam_types for v in (
                 (f"Camera{n}.inputs:type", kind),
                 (f"Camera{n}.inputs:topicName", topic),
@@ -273,7 +296,7 @@ def main() -> int:
     build_scene(stage, assets_root)
     simulation_app.update()
     set_home_pose(stage)
-    add_wrist_camera(stage)
+    add_wrist_camera(stage, assets_root)
     simulation_app.update()
     ViewportManager.set_camera_view("/OmniverseKit_Persp", eye=[1.6, 1.4, 1.1], target=[0.35, 0.1, 0.2])
 

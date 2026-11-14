@@ -3,7 +3,7 @@
 <package format="3">
   <name>cobot_bringup</name>
   <version>0.1.0</version>
-  <description>Arranque base: UR contra URSim con MoveIt 2, y UR en Isaac Sim con cámara RGB-D en la muñeca.</description>
+  <description>Arranque base: UR contra URSim con MoveIt 2, y UR en Isaac Sim con una Intel RealSense D455 en la muñeca.</description>
   <maintainer email="dev@example.com">cobot-base</maintainer>
   <license>Apache-2.0</license>
 
@@ -17,6 +17,7 @@
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>xacro</exec_depend>
+  <exec_depend>realsense2_description</exec_depend>
   <exec_depend>rviz2</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
