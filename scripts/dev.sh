@@ -14,7 +14,11 @@ fi
 # Permite que tu usuario (el mismo UID que el del contenedor) dibuje en la pantalla: RViz, rqt.
 xhost "+SI:localuser:$(id -un)" >/dev/null 2>&1 || echo "Aviso: xhost no disponible; RViz no podrá abrir ventana"
 
-docker compose up -d --build dev
+# Solo se construye/arranca si no está ya en marcha: si lo estuviera, "up --build" lo RECREARÍA (buildx genera una
+# imagen con otro ID en cada build) y mataría lo que corre en las otras terminales.
+if [[ -z "$(docker compose ps --status running -q dev 2>/dev/null)" ]]; then
+  docker compose up -d --build dev
+fi
 if [[ $# -eq 0 ]]; then
   exec docker compose exec dev bash
 else

@@ -284,7 +284,7 @@ Puedes ver la pantalla del robot (la del teach pendant) en el navegador:
 | Programar | Edita los ficheros de `src/` con tu editor normal, en tu PC. |
 | Compilar | Dentro del contenedor: `colcon build --symlink-install` |
 | Abrir otra terminal en el contenedor | En una terminal nueva del PC: `./scripts/dev.sh` (entra en el mismo contenedor) |
-| Añadir una librería o paquete | Añádela a `src/cobot_bringup/package.xml` y reconstruye: `docker compose build dev` |
+| Añadir una librería o paquete | Añádela a `src/cobot_bringup/package.xml` y reconstruye: `docker compose up -d --build dev` (recrea el contenedor: cierra antes lo que tengas abierto en él) |
 | Trabajar desde VS Code | Abre la carpeta y elige *Reopen in Container* |
 | Parar los contenedores | `docker compose down` |
 

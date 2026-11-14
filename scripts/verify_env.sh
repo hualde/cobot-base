@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Comprueba host + imagen de desarrollo. No modifica nada.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 ok=0; fail=0
 check() { if eval "$2" >/dev/null 2>&1; then echo "  [OK]    $1"; ok=$((ok+1)); else echo "  [FALTA] $1"; fail=$((fail+1)); fi; }
 

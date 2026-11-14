@@ -13,8 +13,9 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 ISAACSIM_ROOT="${ISAACSIM_ROOT:-$HOME/isaacsim/isaacsim/_build/linux-x86_64/release}"
 [[ -x "$ISAACSIM_ROOT/python.sh" ]] || { echo "No encuentro $ISAACSIM_ROOT/python.sh; ajusta ISAACSIM_ROOT" >&2; exit 1; }
 
-DOMAIN="$(grep -E '^ROS_DOMAIN_ID=' "$REPO/.env" 2>/dev/null | cut -d= -f2 | awk '{print $1}')"
+DOMAIN="$( (grep -E '^ROS_DOMAIN_ID=' "$REPO/.env" 2>/dev/null || true) | cut -d= -f2 | awk '{print $1}')"  # sin .env: dominio 0
 
+# shellcheck disable=SC2016  # $0/$1 se expanden dentro del bash -c, a propósito
 exec env -u ROS_DISTRO -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -u PYTHONPATH -u LD_LIBRARY_PATH \
   ROS_DOMAIN_ID="${DOMAIN:-0}" \
   bash -c 'source "$0/setup_ros_env.sh" && cd "$0" && exec ./python.sh "$1/isaac/ur_inspection_cell.py" "${@:2}"' \
