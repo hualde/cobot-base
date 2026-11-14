@@ -81,7 +81,7 @@ cobot-base/
 │       ├── CMakeLists.txt        Instrucciones de compilación (qué carpetas se instalan).
 │       ├── launch/               Ficheros para arrancar todo con un comando:
 │       │   ├── isaac_moveit.launch.py     → mover el robot simulado en Isaac Sim
-│       │   └── ursim_moveit.launch.py     → mover el robot de URSim o el robot real
+│       │   └── ur_moveit.launch.py        → mover el robot de URSim o el robot real
 │       ├── urdf/
 │       │   └── ur_wrist_camera.urdf.xacro → forma del robot + cámara montada en la muñeca
 │       ├── config/
@@ -245,7 +245,7 @@ tener el robot físico.
 ```bash
 ./scripts/ursim_up.sh                                  # en tu PC: arranca URSim, lo enciende y suelta frenos
 ./scripts/dev.sh                                       # entrar al contenedor
-ros2 launch cobot_bringup ursim_moveit.launch.py       # conectar ROS 2 al controlador + MoveIt + RViz
+ros2 launch cobot_bringup ur_moveit.launch.py          # conectar ROS 2 al controlador + MoveIt + RViz
 ```
 
 Puedes ver la pantalla del robot (la del teach pendant) en el navegador:
@@ -353,10 +353,25 @@ sha256sum -c SHA256SUMS                  # 1. comprobar que la copia está bien
 docker load < cobot-base_0.1.0.tar.gz     # 2. instalar la imagen
 cp .env.example .env                     # 3. crear la configuración...
 nano .env                                #    ...y poner ROBOT_IP y UR_TYPE de esta célula
-docker compose up -d                     # 4. arrancar
+docker compose run --rm calibrate        # 4. leer la calibración del robot (ver abajo)...
+nano .env                                #    ...y poner KINEMATICS_FILE=/calibration/robot_calibration.yaml
+docker compose up -d                     # 5. arrancar
 ```
 
 A partir de ahora **el programa arranca solo cada vez que se enciende el PC**, y si se cae, se reinicia.
+
+### Calibración del robot
+
+Cada robot UR sale de fábrica con su propia calibración: las medidas reales de sus piezas, que difieren un poco
+de las del modelo. Sin ella el robot funciona, pero las posiciones que calcula ROS 2 pueden desviarse algunos
+milímetros. Por eso **en producción hay que usarla siempre**.
+
+- `docker compose run --rm calibrate` se conecta al robot (que debe estar encendido) y guarda su calibración en
+  `calibration/robot_calibration.yaml`, junto a `compose.yaml`.
+- En `.env`, `KINEMATICS_FILE=/calibration/robot_calibration.yaml` hace que el programa la use.
+  Con `KINEMATICS_FILE=nominal` se usan los valores genéricos del modelo (vale para URSim).
+- La calibración es **de ese robot concreto**: si se cambia el robot, hay que repetirla. Guarda una copia junto al
+  `.env` de ese cliente.
 
 ### Comprobar que funciona
 
@@ -373,9 +388,6 @@ docker compose logs -f     # debe aparecer: "Robot connected to reverse interfac
 | Volver a la 0.1.0 | Poner `VERSION=0.1.0` en `.env` y `docker compose up -d` (la versión anterior sigue guardada) |
 | Parar el programa | `docker compose down` |
 | Saber qué versión funciona | `docker compose images` |
-
-> **Pendiente en esta plantilla**: cada robot UR sale de fábrica con su propia calibración. Para máxima precisión
-> hay que leerla del robot (con `ur_calibration`) y pasársela al launch. Falta añadir esa opción.
 
 ---
 
@@ -407,6 +419,8 @@ Estos ajustes ya están hechos; solo hace falta entenderlos si vas a modificar l
 ## 11. Empezar un proyecto nuevo con esta plantilla
 
 1. Copia la carpeta entera y cambia el nombre.
-2. Añade tu código en `src/` (crea paquetes nuevos con `ros2 pkg create` dentro del contenedor).
+2. Añade tu código en `src/`, **en un paquete propio** (por ejemplo `cobot_app`, creado con `ros2 pkg create`
+   dentro del contenedor), no dentro de `cobot_bringup`. Así `cobot_bringup` sigue siendo el de la plantilla y
+   puedes traer sus mejoras sin mezclarlas con la lógica del cliente.
 3. Apunta siempre las dependencias en `package.xml`.
 4. Para cada cliente, guarda su `deploy/.env` con la IP y la versión entregada.

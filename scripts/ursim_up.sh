@@ -39,4 +39,4 @@ done
 echo "estado:        $(dash 'robotmode')"
 echo
 echo "URSim listo en $IP. Siguiente, dentro del contenedor dev:"
-echo "  ros2 launch cobot_bringup ursim_moveit.launch.py"
+echo "  ros2 launch cobot_bringup ur_moveit.launch.py"

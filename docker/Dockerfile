@@ -93,4 +93,4 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
 # ---------------------------------------------------------------------------------------------------------------
 FROM deps AS runtime
 COPY --from=build /ws/install /ws/install
-CMD ["ros2", "launch", "cobot_bringup", "ursim_moveit.launch.py", "rviz:=false"]
+CMD ["ros2", "launch", "cobot_bringup", "ur_moveit.launch.py", "rviz:=false"]

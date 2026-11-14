@@ -5,6 +5,7 @@
 #   docker compose up -d        arrancar (y queda arrancado tras reinicios del PC)
 #   docker compose logs -f      ver qué está pasando
 #   docker compose down         parar
+#   docker compose run --rm calibrate   leer la calibración del robot a ./calibration/ (una vez por robot)
 services:
   cobot:
     image: ${IMAGE}:${VERSION}
@@ -14,11 +15,28 @@ services:
     restart: unless-stopped   # arranca solo al encender el PC y se reinicia si falla
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    volumes:
+      - ./calibration:/calibration:ro
     command: >
-      ros2 launch cobot_bringup ursim_moveit.launch.py
+      ros2 launch cobot_bringup ur_moveit.launch.py
       robot_ip:=${ROBOT_IP} ur_type:=${UR_TYPE} rviz:=false
+      kinematics_params_file:=${KINEMATICS_FILE:-nominal}
     logging:                  # que los logs no llenen el disco del cliente
       driver: json-file
       options:
         max-size: "10m"
         max-file: "5"
+
+  # Lee la calibración de fábrica del robot y la guarda en ./calibration/robot_calibration.yaml.
+  # Solo se arranca a mano (profile): docker compose run --rm calibrate
+  calibrate:
+    image: ${IMAGE}:${VERSION}
+    profiles: [calibrate]
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+    volumes:
+      - ./calibration:/calibration
+    command: >
+      ros2 launch ur_calibration calibration_correction.launch.py
+      robot_ip:=${ROBOT_IP} target_filename:=/calibration/robot_calibration.yaml
