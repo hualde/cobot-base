@@ -1,0 +1,7 @@
+# Config de ruff explícita y versión fijada en .github/workflows/ci.yml: así una release nueva de ruff
+# (que cambie las reglas por defecto) no rompe la CI sin que hayamos tocado el código.
+line-length = 130
+target-version = "py312"
+
+[lint.isort]
+known-first-party = ["cobot_bringup"]

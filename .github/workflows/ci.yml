@@ -42,5 +42,5 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: pipx run ruff check src
+      - run: pipx run ruff==0.17.5 check src   # versión fijada: subirla a propósito, no por sorpresa
       - run: shellcheck scripts/*.sh docker/*.sh
